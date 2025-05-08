@@ -1,0 +1,13 @@
+[Unit]
+Description=My TG Bot
+After=multi-user.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/draft_bot
+ExecStart=/opt/draft_bot/venv/bin/python -m bot
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+

@@ -69,7 +69,8 @@ async def send_alert_to_telegram(alert: AlertSchema):
 
     # Запускаем отправку сообщений параллельно
     results = await asyncio.gather(*tasks, return_exceptions=True)
-
+    print(results)
+    print(alert.image)
     for user_id, result in zip(telegram_ids, results):
         if isinstance(result, Exception):
             print(f"Ошибка отправки тревоги {alert.id} пользователю {user_id}: {result}")
@@ -104,7 +105,6 @@ async def send_alert_to_telegram_v2(alert: AlertSchema):
     )
 
     image_url = str(alert.image) if alert.image else None
-
     tasks = []  # Список задач для asyncio.gather()
 
     # Добавляем кнопки, если это сообщение для сотрудников службы безопасности
@@ -125,24 +125,14 @@ async def send_alert_to_telegram_v2(alert: AlertSchema):
 
     for telegram_id in telegram_ids:
         if image_url:
-            url_parts = urlparse(image_url)
-            if url_parts.hostname in ("127.0.0.1", "localhost"):
-                relative_path = url_parts.path.lstrip("/")
-                local_path = os.path.join(BASE_DIR, relative_path)
-                if not os.path.exists(local_path):
-                    logging.error(f"Файл изображения не найден: {local_path}")
-                    continue
-                photo = FSInputFile(local_path)
-            else:
-                photo = image_url
-
             tasks.append(
                 bot.send_photo(
                     chat_id=telegram_id,
-                    photo=photo,
+                    photo=image_url,
+                    # photo="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJN7PAWG0Wug0MPkg_vs3P_20HOFTXxGCp_Q&s",
                     caption=message_text,
                     parse_mode="HTML",
-                    reply_markup=reply_markup
+                    reply_markup=reply_markup  # Добавляем кнопки только для службы безопасности
                 )
             )
         else:
@@ -151,17 +141,18 @@ async def send_alert_to_telegram_v2(alert: AlertSchema):
                     chat_id=telegram_id,
                     text=message_text,
                     parse_mode="HTML",
-                    reply_markup=reply_markup
+                    reply_markup=reply_markup  # Добавляем кнопки только для службы безопасности
                 )
             )
 
     # Запускаем отправку сообщений параллельно
     results = await asyncio.gather(*tasks, return_exceptions=True)
-
+    print(23421)
     for user_id, result in zip(telegram_ids, results):
         if isinstance(result, Exception):
             logging.error(f"Ошибка отправки тревоги {alert.id} пользователю {user_id}: {result}")
         else:
+            print(121313)
             logging.info(f"Тревога {alert.id} успешно отправлена пользователю {user_id}")
 
 async def register_user(message: types.Message, token: str):
