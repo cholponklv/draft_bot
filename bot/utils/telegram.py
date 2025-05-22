@@ -1,6 +1,9 @@
 import asyncio
+import tempfile
 import logging
-
+import aiohttp
+from io import BytesIO
+from aiogram.types import FSInputFile
 import requests
 from aiogram import Bot, types
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -38,8 +41,7 @@ async def send_alert_to_telegram(alert: AlertSchema):
     message_text = (
         f"🚨 <b>Тревога обнаружена!</b>\n\n"
         f"📍 <b>Устройство:</b> {alert.device.name or 'Неизвестно'}\n"
-        f"🎥 <b>Камера:</b> {alert.source.source_id} ({alert.source.ipv4})\n"
-        f"⏰ <b>Время:</b> {alert.alert_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"🎥 <b>Камера:</b> {alert.source.source_id} ({alert.source.ipv4})\n"        f"⏰ <b>Время:</b> {alert.alert_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
         f"🤖 <b>Алгоритм:</b> {alert.alg.name}\n"
     )
 
@@ -49,24 +51,52 @@ async def send_alert_to_telegram(alert: AlertSchema):
 
     for telegram_id in telegram_ids:
         if image_url:
-            tasks.append(
-                bot.send_photo(
-                    chat_id=telegram_id,
-                    photo=image_url,
-                    # photo="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJN7PAWG0Wug0MPkg_vs3P_20HOFTXxGCp_Q&s",
-                    caption=message_text,
-                    parse_mode="HTML"
-                )
-            )
+            # Загружаем изображение через aiohttp
+            async with aiohttp.ClientSession() as session:
+                try:
+                    async with session.get(image_url) as resp:
+                        if resp.status == 200:
+                            image_bytes = BytesIO(await resp.read())
+                            image_bytes.name = f"alert_{alert.id}.jpg"
+                            print("suc1")
+                            tasks.append(
+                                bot.send_photo(
+                                    chat_id=telegram_id,
+                                    photo=image_bytes,
+                                    caption=message_text,
+                                    parse_mode="HTML",
+                                    reply_markup=reply_markup
+                                )
+                            )
+                        else:
+                            logging.error(f"Не удалось загрузить изображение: {resp.status}")
+                            tasks.append(
+                                bot.send_message(
+                                    chat_id=telegram_id,
+                                    text=message_text + "\n⚠️ Изображение недоступно.",
+                                    parse_mode="HTML",
+                                    reply_markup=reply_markup
+                                )
+                            )
+                except Exception as e:
+                    logging.error(f"Ошибка при получении изображения: {e}")
+                    tasks.append(
+                        bot.send_message(
+                            chat_id=telegram_id,
+                            text=message_text + "\n⚠️ Ошибка при получении изображения.",
+                            parse_mode="HTML",
+                            reply_markup=reply_markup
+                        )
+                    )
         else:
             tasks.append(
                 bot.send_message(
                     chat_id=telegram_id,
                     text=message_text,
-                    parse_mode="HTML"
+                    parse_mode="HTML",
+                    reply_markup=reply_markup
                 )
             )
-
     # Запускаем отправку сообщений параллельно
     results = await asyncio.gather(*tasks, return_exceptions=True)
     print(results)
@@ -106,7 +136,7 @@ async def send_alert_to_telegram_v2(alert: AlertSchema):
 
     image_url = str(alert.image) if alert.image else None
     tasks = []  # Список задач для asyncio.gather()
-
+    print(image_url)
     # Добавляем кнопки, если это сообщение для сотрудников службы безопасности
     if alert.for_security:
         keyboard = InlineKeyboardBuilder()
@@ -125,27 +155,57 @@ async def send_alert_to_telegram_v2(alert: AlertSchema):
 
     for telegram_id in telegram_ids:
         if image_url:
-            tasks.append(
-                bot.send_photo(
-                    chat_id=telegram_id,
-                    photo=image_url,
-                    # photo="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSJN7PAWG0Wug0MPkg_vs3P_20HOFTXxGCp_Q&s",
-                    caption=message_text,
-                    parse_mode="HTML",
-                    reply_markup=reply_markup  # Добавляем кнопки только для службы безопасности
+            url_parts = urlparse(image_url)
+            if url_parts.hostname in ("127.0.0.1", "localhost"):
+                relative_path = url_parts.path.lstrip("/")
+                local_path = os.path.join(BASE_DIR, relative_path)
+                if not os.path.exists(local_path):
+                    logging.error(f"Файл изображения не найден: {local_path}")
+                    continue
+                photo = FSInputFile(local_path)
+                tasks.append(
+                    bot.send_photo(
+                        chat_id=telegram_id,
+                        photo=photo,
+                        caption=message_text,
+                        parse_mode="HTML",
+                        reply_markup=reply_markup
+                    )
                 )
-            )
+            else:
+                async def fetch_and_send():
+                    try:
+                        async with aiohttp.ClientSession() as session:
+                            async with session.get(image_url) as resp:
+                                if resp.status != 200:
+                                    raise Exception(f"Ошибка загрузки изображения: {resp.status}")
+                                with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
+                                    tmp_file.write(await resp.read())
+                                    tmp_file_path = tmp_file.name
+                        photo = FSInputFile(tmp_file_path)
+                        await bot.send_photo(
+                            chat_id=telegram_id,
+                            photo=photo,
+                            caption=message_text,
+                            parse_mode="HTML",
+                            reply_markup=reply_markup
+                        )
+                        os.remove(tmp_file_path)
+                    except Exception as e:
+                        logging.error(f"Ошибка отправки тревоги {alert.id} пользователю {telegram_id}: {e}")
+
+                tasks.append(fetch_and_send())
         else:
             tasks.append(
                 bot.send_message(
                     chat_id=telegram_id,
                     text=message_text,
                     parse_mode="HTML",
-                    reply_markup=reply_markup  # Добавляем кнопки только для службы безопасности
+                    reply_markup=reply_markup
                 )
             )
-
-    # Запускаем отправку сообщений параллельно
+ # Загружаем изображение через aiohttp
+            # Запускаем отправку сообщений параллельно
     results = await asyncio.gather(*tasks, return_exceptions=True)
     print(23421)
     for user_id, result in zip(telegram_ids, results):

@@ -54,7 +54,6 @@ async def confirm_alert_handler(callback):
     if response.status_code == 200:
         await callback.answer("✅ Тревога подтверждена!", show_alert=True)
         await callback.message.delete_reply_markup()
-
         # # Определяем, где хранится текст: в `text` или `caption`
         # if callback.message.text:
         #     new_text = callback.message.text + "\n\n✅ <b>Подтверждена</b>"
@@ -65,7 +64,10 @@ async def confirm_alert_handler(callback):
 
         # Отправляем учредителям
         alert_data = response.json()
+	print("success")
         executive_users = alert_data.get("executive_users", [])
+        print(response.json())
+        print("alerttdata:",alert_data)
         if executive_users:
             await send_alert_to_executives(alert_data)
     else:
