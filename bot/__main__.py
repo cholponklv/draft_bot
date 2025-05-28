@@ -3,6 +3,7 @@ import logging
 import os
 import requests
 import uvicorn
+import httpx
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message
 from aiogram.filters import CommandStart, Command
@@ -45,13 +46,14 @@ async def start_handler(message: Message):
 @dp.callback_query(F.data.startswith("confirm_"))
 async def confirm_alert_handler(callback):
     alert_id = callback.data.split(":")[1]
-    # Отправляем в Django подтверждение
     url = f"{DJANGO_API_URL}api/algorithms/v1/alerts/{alert_id}/send-action/"
-    response = requests.post(url, json={"action": "confirm"})
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, json={"action": "confirm"})
+
     if response.status_code == 200:
         await callback.answer("✅ Тревога подтверждена!", show_alert=True)
         await callback.message.delete_reply_markup()
-        # Отправляем учредителям
         alert_data = response.json()
         executive_users = alert_data.get("executive_users", [])
         if executive_users:
