@@ -1,8 +1,6 @@
 import asyncio
 import logging
 import os
-from aiogram import types
-import aiohttp
 import requests
 import uvicorn
 from aiogram import Bot, Dispatcher, F
@@ -43,35 +41,29 @@ async def start_handler(message: Message):
         await message.answer("Привет! Используйте специальную ссылку для регистрации.")
 
 
-async def confirm_alert_handler(callback: types.CallbackQuery):
-    # Немедленно отвечаем на callback, чтобы убрать индикатор загрузки у пользователя
-    await callback.answer()
+# 📌 Обработчик подтверждения тревоги
+@dp.callback_query(F.data.startswith("confirm_"))
+async def confirm_alert_handler(callback):
+    alert_id = callback.data.split(":")[1]
+    # Отправляем в Django подтверждение
+    url = f"{DJANGO_API_URL}api/algorithms/v1/alerts/{alert_id}/send-action/"
+    response = requests.post(url, json={"action": "confirm"})
+    if response.status_code == 200:
+        await callback.answer("✅ Тревога подтверждена!", show_alert=True)
+        await callback.message.delete_reply_markup()
+        # Отправляем учредителям
+        alert_data = response.json()
+        executive_users = alert_data.get("executive_users", [])
+        if executive_users:
+            await send_alert_to_executives(alert_data)
+    else:
+        await callback.answer("❌ Ошибка подтверждения тревоги!", show_alert=True)
 
-    alert_id = callback.data  # Предполагаем, что в callback.data передаётся ID тревоги
-    api_url = f"{DJANGO_API_URL}api/algorithms/v1/alerts/{alert_id}/send-action/"
 
-    # Асинхронный POST-запрос к Django API
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.post(api_url, json={"alert_id": alert_id}) as resp:
-                if resp.status != 200:
-                    text = await resp.text()
-                    logging.error(f"Ошибка {resp.status} при подтверждении тревоги {alert_id}: {text}")
-                    return
-                alert_data = await resp.json()  # Получаем данные о тревоге для рассылки
-        except Exception as e:
-            logging.error(f"HTTP-запрос к API при подтверждении тревоги провалился: {e}")
-            return
-
-    # Запускаем фоновой задачей рассылку учредителям (не ждём её завершения)
-    asyncio.create_task(send_alert_to_executives(alert_data))
-
-    
 # 📌 Обработчик отклонения тревоги
 @dp.callback_query(F.data.startswith("reject_"))
 async def reject_alert_handler(callback):
     alert_id = callback.data.split(":")[1]
-    user_id = callback.from_user.id
 
     # Отправляем в Django отклонение
     url = f"{DJANGO_API_URL}api/algorithms/v1/alerts/{alert_id}/send-action/"
