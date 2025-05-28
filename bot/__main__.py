@@ -67,23 +67,17 @@ async def confirm_alert_handler(callback):
 async def reject_alert_handler(callback):
     alert_id = callback.data.split(":")[1]
 
-    # Отправляем в Django отклонение
+    # Асинхронно отправляем отклонение в Django
     url = f"{DJANGO_API_URL}api/algorithms/v1/alerts/{alert_id}/send-action/"
-    response = requests.post(url, json={"action": "reject"})
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, json={"action": "reject"})
+
     if response.status_code == 200:
         await callback.answer("🚫 Тревога отклонена!", show_alert=True)
         await callback.message.delete_reply_markup()
-        # # Определяем, где хранится текст: в `text` или `caption`
-        # if callback.message.text:
-        #     new_text = callback.message.text + "\n\n✅ <b>Подтверждена</b>"
-        #     await callback.message.edit_text(new_text, parse_mode="HTML", reply_markup=None)
-        # elif callback.message.caption:
-        #     new_caption = callback.message.caption + "\n\n✅ <b>Подтверждена</b>"
-        #     await callback.message.edit_caption(new_caption, parse_mode="HTML", reply_markup=None)
-
     else:
         await callback.answer("❌ Ошибка отклонения тревоги!", show_alert=True)
-
 
 # 📌 Отправка учредителям
 async def send_alert_to_executives(alert_data):
