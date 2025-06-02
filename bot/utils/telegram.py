@@ -11,6 +11,7 @@ from aiogram.types import FSInputFile
 from urllib.parse import urlparse
 from bot.schemas import AlertSchema
 import os
+
 BASE_DIR = "/Users/cholponklv/python/visionaibox"
 bot: Bot = None
 chat_id: str = None
