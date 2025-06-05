@@ -99,7 +99,7 @@ async def send_chat_id(message: Message):
 @dp.message(Command("stats"))
 async def send_statistics(message: Message):
     try:
-        url = f"{DJANGO_API_URL}/api/alert-stats/"  # Убедись, что URL корректный
+        url = f"{DJANGO_API_URL}/api/algorithms/alert-stats/"  # Убедись, что URL корректный
         async with httpx.AsyncClient() as client:
             response = await client.get(url)
 
