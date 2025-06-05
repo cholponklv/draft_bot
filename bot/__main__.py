@@ -96,7 +96,34 @@ async def send_chat_id(message: Message):
     await message.answer(f"Ваш chat_id: {message.chat.id}")
 
 
+@dp.message(Command("stats"))
+async def send_statistics(message: Message):
+    try:
+        url = f"{DJANGO_API_URL}/api/alert-stats/"  # Убедись, что URL корректный
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
 
+        if response.status_code != 200:
+            await message.answer("❌ Не удалось получить статистику.")
+            return
+
+        data = response.json()
+        text = (
+            f"📊 <b>Статистика тревог</b>\n\n"
+            f"🔢 Всего тревог: <b>{data['total_alerts']}</b>\n"
+            f"✅ Подтверждено: <b>{data['confirmed_alerts']}</b>\n\n"
+            f"📌 <b>По алгоритмам:</b>\n"
+        )
+
+        for alg in data["algorithms"]:
+            text += (
+                f"▪️ <b>{alg['name']}</b>: {alg['total']} всего, {alg['confirmed']} подтверждено\n"
+            )
+
+        await message.answer(text, parse_mode="HTML")
+    except Exception as e:
+        logging.error(f"Ошибка при получении статистики: {e}")
+        await message.answer("⚠️ Ошибка при получении статистики.")
 
 # Обработчик всех остальных сообщений
 @dp.message()
