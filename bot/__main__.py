@@ -8,9 +8,10 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message
 from aiogram.filters import CommandStart, Command
 from dotenv import load_dotenv
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 from bot.api import app as fastapi_app
 from bot.utils.telegram import setup_telegram, register_user
-
+from aiogram import types
 # Загружаем переменные окружения
 load_dotenv()
 
@@ -95,21 +96,36 @@ async def send_alert_to_executives(alert_data):
 async def send_chat_id(message: Message):
     await message.answer(f"Ваш chat_id: {message.chat.id}")
 
+period_map = {
+    "day": "За день",
+    "week": "За неделю",
+    "month": "За месяц",
+    "all": "За всё время"
+}
 
 @dp.message(Command("stats"))
-async def send_statistics(message: Message):
+async def show_stats_periods(message: Message):
+    kb = InlineKeyboardBuilder()
+    for key, label in period_map.items():
+        kb.button(text=label, callback_data=f"stats_period:{key}")
+    await message.answer("📊 Выберите период:", reply_markup=kb.as_markup())
+
+@dp.callback_query(lambda c: c.data.startswith("stats_period:"))
+async def send_statistics(callback: types.CallbackQuery):
+    period = callback.data.split(":")[1]
+
     try:
-        url = f"{DJANGO_API_URL}api/algorithms/alert-stats/"  # Убедись, что URL корректный
+        url = f"{DJANGO_API_URL}/api/alert-stats/?period={period}"
         async with httpx.AsyncClient() as client:
             response = await client.get(url)
 
         if response.status_code != 200:
-            await message.answer("❌ Не удалось получить статистику.")
+            await callback.message.answer("❌ Не удалось получить статистику.")
             return
 
         data = response.json()
         text = (
-            f"📊 <b>Статистика тревог</b>\n\n"
+            f"📊 <b>Статистика тревог ({period_map.get(period, 'Все')})</b>\n\n"
             f"🔢 Всего тревог: <b>{data['total_alerts']}</b>\n"
             f"✅ Подтверждено: <b>{data['confirmed_alerts']}</b>\n\n"
             f"📌 <b>По алгоритмам:</b>\n"
@@ -120,10 +136,9 @@ async def send_statistics(message: Message):
                 f"▪️ <b>{alg['name']}</b>: {alg['total']} всего, {alg['confirmed']} подтверждено\n"
             )
 
-        await message.answer(text, parse_mode="HTML")
+        await callback.message.answer(text, parse_mode="HTML")
     except Exception as e:
-        logging.error(f"Ошибка при получении статистики: {e}")
-        await message.answer("⚠️ Ошибка при получении статистики.")
+        await callback.message.answer("⚠️ Ошибка при получении статистики.")
 
 # Обработчик всех остальных сообщений
 @dp.message()
