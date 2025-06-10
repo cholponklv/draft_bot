@@ -115,7 +115,7 @@ async def send_statistics(callback: types.CallbackQuery):
     period = callback.data.split(":")[1]
 
     try:
-        url = f"{DJANGO_API_URL}/api/alert-stats/?period={period}"
+        url = f"{DJANGO_API_URL}api/alert-stats/?period={period}"
         async with httpx.AsyncClient() as client:
             response = await client.get(url)
 
