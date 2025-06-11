@@ -226,7 +226,9 @@ def create_stats_pdf(data: dict, period: str) -> str:
     try:
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_font("Helvetica", size=12)
+        font_path = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
+        pdf.add_font("DejaVu", "", font_path, uni=True)
+        pdf.set_font("DejaVu", size=12)
 
         pdf.cell(200, 10, txt=f"Статистика тревог ({period})", ln=True, align="C")
         pdf.ln(10)
