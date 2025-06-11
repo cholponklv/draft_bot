@@ -16,6 +16,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from fpdf import FPDF
 from tempfile import NamedTemporaryFile
+import traceback
 # Загружаем переменные окружения
 load_dotenv()
 # Получаем токены из .env
@@ -217,26 +218,34 @@ async def fetch_and_send_pdf(message: types.Message, period: str, start=None, en
         with open(pdf_path, "rb") as file:
             await message.answer_document(types.InputFile(file, filename="alert_stats.pdf"))
     except Exception as e:
+        print("‼️ Ошибка в fetch_and_send_pdf:", e)
+        traceback.print_exc()
         await message.answer("⚠️ Ошибка при создании PDF.")
-        print(f"[PDF ERROR] {e}") 
 
-def create_stats_pdf(data: dict, label: str) -> str:
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Helvetica", size=12)
-    pdf.cell(200, 10, txt=f"Статистика тревог ({label})", ln=True, align="C")
-    pdf.ln(10)
-    pdf.cell(200, 10, txt=f"Всего тревог: {data['total_alerts']}", ln=True)
-    pdf.cell(200, 10, txt=f"Подтверждено: {data['confirmed_alerts']}", ln=True)
-    pdf.ln(10)
-    pdf.cell(200, 10, txt="По алгоритмам:", ln=True)
-    for alg in data["algorithms"]:
-        line = f"{alg['name']}: {alg['total']} всего, {alg['confirmed']} подтверждено"
-        pdf.cell(200, 10, txt=line, ln=True)
-    tmp = NamedTemporaryFile(delete=False, suffix=".pdf")
-    print(f"[PDF PATH] {tmp.name}")
-    pdf.output(tmp.name)
-    return tmp.name
+def create_stats_pdf(data: dict, period: str) -> str:
+    try:
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Helvetica", size=12)
+
+        pdf.cell(200, 10, txt=f"Статистика тревог ({period})", ln=True, align="C")
+        pdf.ln(10)
+        pdf.cell(200, 10, txt=f"Всего тревог: {data['total_alerts']}", ln=True)
+        pdf.cell(200, 10, txt=f"Подтверждено: {data['confirmed_alerts']}", ln=True)
+        pdf.ln(10)
+        pdf.cell(200, 10, txt="По алгоритмам:", ln=True)
+
+        for alg in data["algorithms"]:
+            line = f"{alg['name']}: {alg['total']} всего, {alg['confirmed']} подтверждено"
+            pdf.cell(200, 10, txt=line, ln=True)
+
+        tmp = NamedTemporaryFile(delete=False, suffix=".pdf")
+        pdf.output(tmp.name)
+        return tmp.name
+    except Exception as e:
+        print("‼️ Ошибка в create_stats_pdf():", e)
+        traceback.print_exc()
+        raise
 
 
 def format_stats(data: dict, period: str) -> str:
