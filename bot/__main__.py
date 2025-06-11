@@ -216,7 +216,7 @@ async def fetch_and_send_pdf(message: types.Message, period: str, start=None, en
         print(data)
         pdf_path = create_stats_pdf(data, label)
         with open(pdf_path, "rb") as file:
-            await message.answer_document(types.InputFile(file, filename="alert_stats.pdf"))
+            await message.answer_document(types.InputFile(path=file, filename="alert_stats.pdf"))
     except Exception as e:
         print("‼️ Ошибка в fetch_and_send_pdf:", e)
         traceback.print_exc()
