@@ -109,7 +109,7 @@ period_map = {
 class StatsStates(StatesGroup):
     awaiting_dates = State()
 
-@router.message(Command("stats"))
+@dp.message(Command("stats"))
 async def show_stats_periods(message: types.Message):
     kb = InlineKeyboardBuilder()
     
@@ -123,7 +123,7 @@ async def show_stats_periods(message: types.Message):
 
     await message.answer("📊 Выберите период:", reply_markup=kb.as_markup())
 
-@router.callback_query(F.data.startswith("stats_period:"))
+@dp.callback_query(F.data.startswith("stats_period:"))
 async def send_statistics(callback: types.CallbackQuery, state: FSMContext):
     period = callback.data.split(":")[1]
 
@@ -146,7 +146,7 @@ async def send_statistics(callback: types.CallbackQuery, state: FSMContext):
     except Exception:
         await callback.message.answer("⚠️ Ошибка при получении статистики.")
 
-@router.message(StatsStates.awaiting_dates)
+@dp.message(StatsStates.awaiting_dates)
 async def handle_custom_dates(message: types.Message, state: FSMContext):
     try:
         start_str, end_str = message.text.strip().split()
@@ -187,7 +187,6 @@ async def start_fastapi():
     await server.serve()
 
 async def main():
-    dp.include_router(router)
     """Запускает бота и FastAPI сервер одновременно."""
     await asyncio.gather(dp.start_polling(bot), start_fastapi())
 
