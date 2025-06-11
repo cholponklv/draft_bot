@@ -17,6 +17,7 @@ from aiogram.fsm.state import State, StatesGroup
 from fpdf import FPDF
 from tempfile import NamedTemporaryFile
 import traceback
+from aiogram.types import FSInputFile
 # Загружаем переменные окружения
 load_dotenv()
 # Получаем токены из .env
@@ -207,16 +208,21 @@ async def fetch_and_send_pdf(message: types.Message, period: str, start=None, en
         else:
             url = f"{DJANGO_API_URL}api/algorithms/alert-stats/?period={period}"
             label = period_map.get(period, "Период")
+
         async with httpx.AsyncClient() as client:
             response = await client.get(url)
+
         if response.status_code != 200:
             await message.answer("❌ Не удалось получить данные.")
             return
+
         data = response.json()
-        print(data)
         pdf_path = create_stats_pdf(data, label)
-        with open(pdf_path, "rb") as file:
-            await message.answer_document(types.InputFile(path=file, filename="alert_stats.pdf"))
+
+        # ✅ используем FSInputFile для корректной отправки
+        document = FSInputFile(path=pdf_path, filename="alert_stats.pdf")
+        await message.answer_document(document)
+        os.remove(pdf_path)  # очищаем временный файл
     except Exception as e:
         print("‼️ Ошибка в fetch_and_send_pdf:", e)
         traceback.print_exc()
