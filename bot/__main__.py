@@ -187,6 +187,7 @@ async def start_fastapi():
     await server.serve()
 
 async def main():
+    dp.include_router(router)
     """Запускает бота и FastAPI сервер одновременно."""
     await asyncio.gather(dp.start_polling(bot), start_fastapi())
 
