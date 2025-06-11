@@ -212,16 +212,18 @@ async def fetch_and_send_pdf(message: types.Message, period: str, start=None, en
             await message.answer("❌ Не удалось получить данные.")
             return
         data = response.json()
+        print(data)
         pdf_path = create_stats_pdf(data, label)
         with open(pdf_path, "rb") as file:
             await message.answer_document(types.InputFile(file, filename="alert_stats.pdf"))
-    except Exception:
+    except Exception as e:
         await message.answer("⚠️ Ошибка при создании PDF.")
+        print(f"[PDF ERROR] {e}") 
 
 def create_stats_pdf(data: dict, label: str) -> str:
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", size=12)
+    pdf.set_font("Helvetica", size=12)
     pdf.cell(200, 10, txt=f"Статистика тревог ({label})", ln=True, align="C")
     pdf.ln(10)
     pdf.cell(200, 10, txt=f"Всего тревог: {data['total_alerts']}", ln=True)
@@ -232,6 +234,7 @@ def create_stats_pdf(data: dict, label: str) -> str:
         line = f"{alg['name']}: {alg['total']} всего, {alg['confirmed']} подтверждено"
         pdf.cell(200, 10, txt=line, ln=True)
     tmp = NamedTemporaryFile(delete=False, suffix=".pdf")
+    print(f"[PDF PATH] {tmp.name}")
     pdf.output(tmp.name)
     return tmp.name
 
