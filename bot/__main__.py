@@ -14,10 +14,10 @@ from bot.utils.telegram import setup_telegram, register_user
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram import Router
+from fpdf import FPDF
+from tempfile import NamedTemporaryFile
 # Загружаем переменные окружения
 load_dotenv()
-router = Router()
 # Получаем токены из .env
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = "777079324"  # ID чата для отправки тревог
@@ -109,6 +109,9 @@ period_map = {
 class StatsStates(StatesGroup):
     awaiting_dates = State()
 
+class PDFStatsStates(StatesGroup):
+    awaiting_dates = State()
+
 @dp.message(Command("stats"))
 async def show_stats_periods(message: types.Message):
     kb = InlineKeyboardBuilder()
@@ -164,6 +167,74 @@ async def handle_custom_dates(message: types.Message, state: FSMContext):
         await message.answer("⚠️ Неверный формат. Введите даты в виде: 2025-05-05 2025-05-24")
     finally:
         await state.clear()
+
+@dp.message(Command("pdf"))
+async def show_pdf_periods(message: types.Message):
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Сегодня", callback_data="pdf_period:day")
+    kb.button(text="Неделя", callback_data="pdf_period:week")
+    kb.button(text="Месяц", callback_data="pdf_period:month")
+    kb.button(text="Всё время", callback_data="pdf_period:all")
+    kb.button(text="📅 Выбрать даты", callback_data="pdf_period:custom")
+    kb.adjust(2, 2, 1)
+    await message.answer("📄 Выберите период для PDF:", reply_markup=kb.as_markup())
+
+@dp.callback_query(F.data.startswith("pdf_period:"))
+async def generate_pdf_stats(callback: types.CallbackQuery, state: FSMContext):
+    period = callback.data.split(":")[1]
+    if period == "custom":
+        await callback.message.answer("🗓 Введите даты в формате:\n<code>2025-05-05 2025-05-24</code>")
+        await state.set_state(PDFStatsStates.awaiting_dates)
+        return
+    await fetch_and_send_pdf(callback.message, period)
+
+@dp.message(PDFStatsStates.awaiting_dates)
+async def handle_pdf_custom_dates(message: types.Message, state: FSMContext):
+    try:
+        start_str, end_str = message.text.strip().split()
+        await fetch_and_send_pdf(message, "custom", start_str, end_str)
+    except Exception:
+        await message.answer("⚠️ Неверный формат. Введите даты в виде: 2025-05-05 2025-05-24")
+    finally:
+        await state.clear()
+
+async def fetch_and_send_pdf(message: types.Message, period: str, start=None, end=None):
+    try:
+        if period == "custom":
+            url = f"{DJANGO_API_URL}api/algorithms/alert-stats/?start_date={start}&end_date={end}"
+            label = f"{start} – {end}"
+        else:
+            url = f"{DJANGO_API_URL}api/algorithms/alert-stats/?period={period}"
+            label = period_map.get(period, "Период")
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+        if response.status_code != 200:
+            await message.answer("❌ Не удалось получить данные.")
+            return
+        data = response.json()
+        pdf_path = create_stats_pdf(data, label)
+        with open(pdf_path, "rb") as file:
+            await message.answer_document(types.InputFile(file, filename="alert_stats.pdf"))
+    except Exception:
+        await message.answer("⚠️ Ошибка при создании PDF.")
+
+def create_stats_pdf(data: dict, label: str) -> str:
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt=f"Статистика тревог ({label})", ln=True, align="C")
+    pdf.ln(10)
+    pdf.cell(200, 10, txt=f"Всего тревог: {data['total_alerts']}", ln=True)
+    pdf.cell(200, 10, txt=f"Подтверждено: {data['confirmed_alerts']}", ln=True)
+    pdf.ln(10)
+    pdf.cell(200, 10, txt="По алгоритмам:", ln=True)
+    for alg in data["algorithms"]:
+        line = f"{alg['name']}: {alg['total']} всего, {alg['confirmed']} подтверждено"
+        pdf.cell(200, 10, txt=line, ln=True)
+    tmp = NamedTemporaryFile(delete=False, suffix=".pdf")
+    pdf.output(tmp.name)
+    return tmp.name
+
 
 def format_stats(data: dict, period: str) -> str:
     text = (
