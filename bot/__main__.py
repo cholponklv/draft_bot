@@ -112,9 +112,15 @@ class StatsStates(StatesGroup):
 @router.message(Command("stats"))
 async def show_stats_periods(message: types.Message):
     kb = InlineKeyboardBuilder()
-    for key, label in period_map.items():
-        kb.button(text=label, callback_data=f"stats_period:{key}")
+    
+    kb.button(text="Сегодня", callback_data="stats_period:day")
+    kb.button(text="Неделя", callback_data="stats_period:week")
+    kb.button(text="Месяц", callback_data="stats_period:month")
+    kb.button(text="Всё время", callback_data="stats_period:all")
     kb.button(text="📅 Выбрать даты", callback_data="stats_period:custom")
+
+    kb.adjust(2, 2, 1)
+
     await message.answer("📊 Выберите период:", reply_markup=kb.as_markup())
 
 @router.callback_query(F.data.startswith("stats_period:"))
